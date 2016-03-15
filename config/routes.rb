@@ -1,6 +1,17 @@
 Rails.application.routes.draw do
 
-  
+  post 'api/register_user'
+  post 'api/signin'
+  post 'api/reset_password'
+
+  post 'api/upload_photo'
+  get 'api/get_photos'
+  delete 'api/delete_photo'
+    
+  get 'api/get_token'  
+  get 'api/clear_token'
+    
+  match "*path", to: "application#page_not_found", via: :all   
 
   # The priority is based upon order of creation: first created -> highest priority.
   # See how all your routes lay out with "rake routes".
