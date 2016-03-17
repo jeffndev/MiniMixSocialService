@@ -4,7 +4,7 @@ Rails.application.routes.draw do
   post 'api/signin'
   post 'api/reset_password'
 
-  post 'api/upload_photo'
+  post 'api/upload_song'
   get 'api/get_photos'
   delete 'api/delete_photo'
     

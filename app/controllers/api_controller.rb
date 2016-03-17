@@ -76,7 +76,52 @@ class ApiController < ApplicationController
       end
     end
   end
+  
+  def upload_song
+    if params[:email] && params[:mix] && params[:song_id] && params[:song_name] && params[:genre]
+      user = User.where( :email => params[:email]).first
+      if user 
+        song_file = params[:mix].read
+        
+        s3 = AWS::S3.new
+        if s3
+          rand_id = rand_string(40)
+          bucket = s3.buckets[ENV["S3_BUCKET_NAME"]]
+          s3_obj = bucket.objects[rand_id]
+          s3_obj.write(song_file, :acl => :public_read)
+          audio_file_url = s3_obj.public_url.to_s
 
+          song = SongMix.new(:user_id => user.id,
+                             :name => params[:song_name],
+                             :song_identifier_hash => params[:song_id], 
+                             :genre => params[:genre], 
+                             :mix_file_url => audio_file_url,
+                             :s3_random_id => rand_id)
+          if song.save
+              render :json => song.to_json
+            else
+              error_str = ""
+
+              song.errors.each{|attr, msg|           
+                error_str += "#{attr} - #{msg},"
+              }
+                    
+              e = Error.new(:status => 400, :message => error_str)
+              render :json => e.to_json, :status => 400
+            end
+        else
+          e = Error.new(:status => 400, :message => 'Could not connect to AWS S3')
+          render :json => e.to_json, :status => 400
+        end
+      else
+        e = Error.new(:status => 400, :message => 'Could not identify user to upload song')
+        render :json => e.to_json, :status => 400  
+      end
+    else
+      e = Error.new(:status => 400, :message => 'required upload form parameters were not there')
+      render :json => e.to_json, :status => 400
+    end
+  end
 
 private 
   
@@ -98,8 +143,8 @@ private
     :email_verification, :api_authtoken, :authtoken_expiry)
   end
   
-  def photo_params
-    params.require(:photo).permit(:name, :title, :user_id, :random_id, :image_url)
-  end
+  #def photo_params
+  #  params.require(:photo).permit(:name, :title, :user_id, :random_id, :image_url)
+  #end
 
 end
