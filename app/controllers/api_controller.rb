@@ -84,7 +84,7 @@ class ApiController < ApplicationController
         old_song = SongMix.where( :song_identifier_hash => params[:song_identifier_hash]).first
         if old_song
          #TODO: check a version number, if params version is greater, then continue and remove old song from s3..
-          render :json => old_song.to_json and return
+          render :json => old_song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})  and return
         end
         song_file = params[:mix].read
         
@@ -118,7 +118,7 @@ class ApiController < ApplicationController
                                         )      
               end
 
-              render :json => song.to_json
+              render :json => song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})
             else
               error_str = ""
 
