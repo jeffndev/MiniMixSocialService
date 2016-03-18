@@ -5,6 +5,9 @@ Rails.application.routes.draw do
   post 'api/reset_password'
 
   post 'api/upload_song'
+  post 'api/upload_song_file'
+  post 'api/upload_track_file'
+  
   get 'api/get_photos'
   delete 'api/delete_photo'
     

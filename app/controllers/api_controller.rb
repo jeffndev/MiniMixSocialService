@@ -1,5 +1,5 @@
 class ApiController < ApplicationController
-   http_basic_authenticate_with name:ENV["API_AUTH_NAME"], password:ENV["API_AUTH_PASSWORD"], :only => [:register_user, :signin, :get_token]  
+   http_basic_authenticate_with name:ENV["API_AUTH_NAME"], password:ENV["API_AUTH_PASSWORD"], :only => [:register_user, :signin, :get_token, :upload_song, :upload_song_file, :upload_track_file ]  
 
 
   skip_before_filter  :verify_authenticity_token
@@ -76,15 +76,78 @@ class ApiController < ApplicationController
       end
     end
   end
-  
-  def upload_song
-    if params[:email] && params[:mix] && params[:song_identifier_hash] && params[:name] && params[:genre]
+  def upload_track_file
+    if params[:email]  && params[:song_identifier_hash] && params[:track_identifier_hash] && params[:track] 
       user = User.where( :email => params[:email]).first
       if user
-        old_song = SongMix.where( :song_identifier_hash => params[:song_identifier_hash]).first
-        if old_song
-         #TODO: check a version number, if params version is greater, then continue and remove old song from s3..
-          render :json => old_song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})  and return
+        puts "in upload, got user"
+        song = user.song_mixes.where( :song_identifier_hash => params[:song_identifier_hash]).first
+        if song.nil?
+           e = Error.new(:status => 400, :message => 'Could not identify the song for file upload')
+           render :json => e.to_json, :status => 400 and return
+        end
+        track = song.audio_tracks.where( :track_identifier_hash => params[:track_identifier_hash]).first
+        if track.nil?
+            e = Error.new(:status => 400, :message => 'Could not identify the track for file upload')
+           render :json => e.to_json, :status => 400 and return
+        end
+        #TODO: might want to check if exists s3_random_id and mix_file_url already...
+        if !track.track_file_url.blank? && !track.s3_random_id.blank?
+           puts "track file was already uploaded"
+           render :json => track.to_json  and return
+        end
+        track_file = params[:track].read
+        
+        s3 = AWS::S3.new
+        if s3
+          rand_id = rand_string(40)
+          bucket = s3.buckets[ENV["S3_BUCKET_NAME"]]
+          s3_obj = bucket.objects[rand_id]
+          s3_obj.write(track_file, :acl => :public_read)
+          audio_file_url = s3_obj.public_url.to_s
+          
+          if track.update_attributes( :track_file_url => audio_file_url, :s3_random_id => rand_id)
+              render :json => track.to_json and return
+          else
+              error_str = ""
+
+              track.errors.each{|attr, msg|           
+                error_str += "#{attr} - #{msg},"
+              }
+                    
+              e = Error.new(:status => 400, :message => error_str)
+              render :json => e.to_json, :status => 400
+          end
+        else
+          e = Error.new(:status => 400, :message => 'Could not connect to AWS S3')
+          render :json => e.to_json, :status => 400
+        end
+      else
+        e = Error.new(:status => 400, :message => 'Could not identify user to upload track')
+        render :json => e.to_json, :status => 400  
+      end
+    else
+      e = Error.new(:status => 400, :message => 'required upload form parameters were not there')
+      render :json => e.to_json, :status => 400
+    end
+  end
+  
+  def upload_song_file
+    if params[:email]  && params[:song_identifier_hash] && params[:mix] 
+      user = User.where( :email => params[:email]).first
+      if user
+        puts "in upload, got user"
+        song = user.song_mixes.where( :song_identifier_hash => params[:song_identifier_hash]).first
+        if song.nil?
+           e = Error.new(:status => 400, :message => 'Could not identify the song for file upload')
+           render :json => e.to_json, :status => 400 and return
+        end
+        #TODO: might want to check if exists s3_random_id and mix_file_url already...
+        puts song.mix_file_url
+        puts song.s3_random_id
+        if !song.mix_file_url.blank? && !song.s3_random_id.blank?
+           puts "song file was already uploaded"
+           render :json => song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }}) and return
         end
         song_file = params[:mix].read
         
@@ -95,16 +158,50 @@ class ApiController < ApplicationController
           s3_obj = bucket.objects[rand_id]
           s3_obj.write(song_file, :acl => :public_read)
           audio_file_url = s3_obj.public_url.to_s
+          
+          if song.update_attributes( :mix_file_url => audio_file_url, :s3_random_id => rand_id)
+              render :json => song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})
+          else
+              error_str = ""
 
+              song.errors.each{|attr, msg|           
+                error_str += "#{attr} - #{msg},"
+              }
+                    
+              e = Error.new(:status => 400, :message => error_str)
+              render :json => e.to_json, :status => 400
+          end
+        else
+          e = Error.new(:status => 400, :message => 'Could not connect to AWS S3')
+          render :json => e.to_json, :status => 400
+        end
+      else
+        e = Error.new(:status => 400, :message => 'Could not identify user to upload song')
+        render :json => e.to_json, :status => 400  
+      end
+    else
+      e = Error.new(:status => 400, :message => 'required upload form parameters were not there')
+      render :json => e.to_json, :status => 400
+    end
+  end
+ 
+   def upload_song
+    if params[:email]  && params[:song_identifier_hash] && params[:name] && params[:genre]
+      user = User.where( :email => params[:email]).first
+      if user
+        old_song = SongMix.where( :song_identifier_hash => params[:song_identifier_hash]).first
+        if old_song
+         #TODO: check a version number, if params version is greater, then continue and remove old song from s3..
+          render :json => old_song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})  and return
+        end
+        
           song = user.song_mixes.build(
                              :name => params[:name],
                              :song_identifier_hash => params[:song_identifier_hash], 
                              :genre => params[:genre],
                              :song_description => params[:song_description], 
                              :self_rating => params[:self_rating],
-                             :song_duration_secs => params[:song_duration_secs],
-                             :mix_file_url => audio_file_url,
-                             :s3_random_id => rand_id)
+                             :song_duration_secs => params[:song_duration_secs])
           
           if song.save
               0.upto(5) do |i|
@@ -129,10 +226,7 @@ class ApiController < ApplicationController
               e = Error.new(:status => 400, :message => error_str)
               render :json => e.to_json, :status => 400
             end
-        else
-          e = Error.new(:status => 400, :message => 'Could not connect to AWS S3')
-          render :json => e.to_json, :status => 400
-        end
+
       else
         e = Error.new(:status => 400, :message => 'Could not identify user to upload song')
         render :json => e.to_json, :status => 400  
