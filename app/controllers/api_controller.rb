@@ -78,9 +78,14 @@ class ApiController < ApplicationController
   end
   
   def upload_song
-    if params[:email] && params[:mix] && params[:song_id] && params[:song_name] && params[:genre]
+    if params[:email] && params[:mix] && params[:song_identifier_hash] && params[:name] && params[:genre]
       user = User.where( :email => params[:email]).first
-      if user 
+      if user
+        old_song = SongMix.where( :song_identifier_hash => params[:song_identifier_hash]).first
+        if old_song
+         #TODO: check a version number, if params version is greater, then continue and remove old song from s3..
+          render :json => old_song.to_json and return
+        end
         song_file = params[:mix].read
         
         s3 = AWS::S3.new
@@ -91,13 +96,28 @@ class ApiController < ApplicationController
           s3_obj.write(song_file, :acl => :public_read)
           audio_file_url = s3_obj.public_url.to_s
 
-          song = SongMix.new(:user_id => user.id,
-                             :name => params[:song_name],
-                             :song_identifier_hash => params[:song_id], 
-                             :genre => params[:genre], 
+          song = user.song_mixes.build(
+                             :name => params[:name],
+                             :song_identifier_hash => params[:song_identifier_hash], 
+                             :genre => params[:genre],
+                             :song_description => params[:song_description], 
+                             :self_rating => params[:self_rating],
+                             :song_duration_secs => params[:song_duration_secs],
                              :mix_file_url => audio_file_url,
                              :s3_random_id => rand_id)
+          
           if song.save
+              0.upto(5) do |i|
+                break if !params["track_identifier_hash#{i}"]
+                song.audio_tracks.create(:name => params["name#{i}"],
+                                         :display_order => params["display_order#{i}"],
+                                         :mix_volume => params["mix_volume#{i}"],
+                                         :track_identifier_hash => params["track_identifier_hash#{i}"],
+                                         :track_description => params["track_description#{i}"],
+                                         :track_duration_secs => params["track_duration_secs#{i}"]
+                                        )      
+              end
+
               render :json => song.to_json
             else
               error_str = ""

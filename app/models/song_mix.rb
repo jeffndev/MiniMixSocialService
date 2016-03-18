@@ -1,6 +1,6 @@
 class SongMix < ActiveRecord::Base
   belongs_to :user
-  
+  has_many :audio_tracks  
 
 
   def to_json(options={})

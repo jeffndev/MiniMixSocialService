@@ -34,3 +34,4 @@ db/schema.rb
 #environment variables for heroku...set them with config:set rather than pushing this file to Heroku
 /.env
 /aws.access.creds
+/set.env.sh
