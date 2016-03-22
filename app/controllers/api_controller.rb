@@ -1,5 +1,5 @@
 class ApiController < ApplicationController
-   http_basic_authenticate_with name:ENV["API_AUTH_NAME"], password:ENV["API_AUTH_PASSWORD"], :only => [:register_user, :signin, :get_token, :upload_song, :upload_song_file, :upload_track_file ]  
+   http_basic_authenticate_with name:ENV["API_AUTH_NAME"], password:ENV["API_AUTH_PASSWORD"], :only => [:register_user, :signin, :get_token, :upload_song, :upload_song_file, :upload_track_filei, :search_songs ]  
 
 
   skip_before_filter  :verify_authenticity_token
@@ -10,7 +10,10 @@ class ApiController < ApplicationController
            signin
            return
         end
-        
+        if User.where(:display_name => params[:display_name]).first
+          e = Error.new(:status => 400, :message => "user display name is taken, please choose another one")
+          render :json => e.to_json, :status => 410 and return
+        end        
         params[:user] = Hash.new    
         #params[:user][:first_name] = params[:full_name].split(" ").first
         #params[:user][:last_name] = params[:full_name].split(" ").last
@@ -42,7 +45,7 @@ class ApiController < ApplicationController
         end
       else
         e = Error.new(:status => 400, :message => "required parameters are missing")
-        render :json => e.to_json, :status => 400
+        render :json => e.to_json, :status => 420
       end
   end
   
@@ -131,7 +134,25 @@ class ApiController < ApplicationController
       render :json => e.to_json, :status => 400
     end
   end
-  
+ 
+  def search_songs
+    if !(params[:email] && params[:query])
+       e = Error.new(:status => 400, :message => 'required search form parameters were not there')
+      render :json => e.to_json, :status => 400 and return
+    end
+    #TODO: looking up the user each time will reallly slow things, would like to avoid this...maybe cache it somehow
+    user = User.where( email: params[:email]).first
+    if !user
+      e = Error.new(:status => 400, :message => 'Could not identify user for search')
+      render :json => e.to_json, :status => 400 and return
+    end
+    query = params[:query]
+    toks =  query.strip.split(/\W+/)
+    tsquery = toks.join('|')
+    #TODO: now put that query into the textsearch through psql..
+    render :json => Search.advanced_search(term: tsquery).limit(20).to_json( except: [:term, :searchable_type] ), :status => 200
+  end
+ 
   def upload_song_file
     if params[:email]  && params[:song_identifier_hash] && params[:mix] 
       user = User.where( :email => params[:email]).first
@@ -186,7 +207,7 @@ class ApiController < ApplicationController
   end
  
    def upload_song
-    if params[:email]  && params[:song_identifier_hash] && params[:name] && params[:genre]
+    if params[:email]  && params[:song_identifier_hash] && params[:name] && params[:genre] && params[:private_flag]
       user = User.where( :email => params[:email]).first
       if user
         old_song = SongMix.where( :song_identifier_hash => params[:song_identifier_hash]).first
@@ -201,6 +222,7 @@ class ApiController < ApplicationController
                              :genre => params[:genre],
                              :song_description => params[:song_description], 
                              :self_rating => params[:self_rating],
+                             :private_flag => params[:private_flag],
                              :song_duration_secs => params[:song_duration_secs])
           
           if song.save

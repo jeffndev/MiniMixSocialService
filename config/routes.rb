@@ -8,6 +8,7 @@ Rails.application.routes.draw do
   post 'api/upload_song_file'
   post 'api/upload_track_file'
   
+  post 'api/search_songs'
   get 'api/get_photos'
   delete 'api/delete_photo'
     
