@@ -13,12 +13,12 @@ class User < ActiveRecord::Base
     if user 
       puts "******************* #{password} 1"
       
-     # begin
-      #  password = AESCrypt.decrypt(password, ENV["API_AUTH_PASSWORD"])      
-      #rescue Exception => e
-      #  password = nil
-      #  puts "error - #{e.message}"
-      #end
+      begin
+        password = AESCrypt.decrypt(password, ENV["API_AUTH_PASSWORD"])      
+      rescue Exception => e
+        password = nil
+        puts "error - #{e.message}"
+      end
       
      # puts "******************* #{password} 2"
               

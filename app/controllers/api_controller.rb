@@ -20,7 +20,7 @@ class ApiController < ApplicationController
         params[:user][:email] = params[:email]
         params[:user][:display_name] = params[:display_name] 
         begin 
-          decrypted_pass = params[:password]   #AESCrypt.decrypt(params[:password], ENV["API_AUTH_PASSWORD"])
+          decrypted_pass = AESCrypt.decrypt(params[:password], ENV["API_AUTH_PASSWORD"])
         rescue Exception => e
           decrypted_pass = nil          
         end
