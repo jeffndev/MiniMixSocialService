@@ -10,11 +10,9 @@ Rails.application.routes.draw do
   
   post 'api/search_songs'
   get 'api/verify_token'
-  get 'api/get_photos'
-  delete 'api/delete_photo'
+  get 'api/song_privacy'
+
     
-  get 'api/get_token'  
-  get 'api/clear_token'
     
   match "*path", to: "application#page_not_found", via: :all   
 

@@ -63,6 +63,28 @@ class ApiController < ApplicationController
     render json: verify.to_json, status: 200
   end  
 
+  def song_privacy
+    if !@user
+      e = Error.new(status: 401, message: 'User token could not identify user')
+      render json: e.to_json, status: 401 and return
+    end
+    if !params[:song_id]
+      e = Error.new( status: 400, message: 'required parameters are missing')
+      render json: e.to_json, status: 400 and return
+    end
+    if @user.authtoken_expiry < Time.now
+      e = Error.new( status: 401,  message: 'User authtoken has expired, could not identify user')
+      render json: e.to_json, status: 400 and return
+    end
+    song = SongMix.where( song_identifier_hash: params[:song_id] ).first
+    if !song
+      e = Error.new( status: 400, message: 'could not identify song from id')
+      render json: e.to_json, status: 400 and return
+    end
+    verify = { song_info: { private_flag: song.private_flag }} 
+    render json: verify.to_json, status: 200
+  end
+
   def signin
     if request.post?
       if params && params[:email] && params[:password]
