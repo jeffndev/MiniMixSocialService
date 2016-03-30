@@ -11,7 +11,7 @@ Rails.application.routes.draw do
   post 'api/search_songs'
   get 'api/verify_token'
   get 'api/song_privacy'
-
+  get 'api/my_uploaded_songs'
     
     
   match "*path", to: "application#page_not_found", via: :all   

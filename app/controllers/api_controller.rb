@@ -195,6 +195,18 @@ class ApiController < ApplicationController
     #TODO: now put that query into the textsearch through psql..
     render :json => Search.advanced_search(term: tsquery).where("user_id != ?", @user.id).limit(20).to_json( except: [:term, :searchable_type] ), :status => 200
   end
+
+  def my_uploaded_songs
+    if !@user
+      e = Error.new(status: 401, message: 'User token could not identify user')
+      render json: e.to_json, status: 401 and return
+    end
+    if @user.authtoken_expiry < Time.now
+      e = Error.new( status: 401,  message: 'User authtoken has expired, could not identify user')
+      render json: e.to_json, status: 400 and return
+    end
+    render json: @user.song_mixes.to_json( include: { audio_tracks:  {except: [:song_mix_id, :id]}}), status: 200
+  end
  
   def upload_song_file
     if  params[:song_identifier_hash] && params[:mix] 
