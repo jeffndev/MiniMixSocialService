@@ -87,6 +87,29 @@ class ApiController < ApplicationController
     render json: verify.to_json, status: 200
   end
 
+  def song_version
+    if !@user
+      e = Error.new(status: 401, message: 'User token could not identify user')
+      render json: e.to_json, status: 401 and return
+    end
+    if !params[:song_id]
+      e = Error.new( status: 400, message: 'required parameters are missing')
+      render json: e.to_json, status: 400 and return
+    end
+    if @user.authtoken_expiry < Time.now
+      e = Error.new( status: 401,  message: 'User authtoken has expired, could not identify user')
+      render json: e.to_json, status: 400 and return
+    end
+    song = @user.song_mixes.where( song_identifier_hash: params[:song_id] ).first
+    if !song
+      e = Error.new( status: 400, message: 'could not identify song from id')
+      render json: e.to_json, status: 400 and return
+    end
+    version_info = { song_info: { version: song.version }} 
+    render json: version_info.to_json, status: 200
+  end
+
+
   def signin
     if request.post?
       if params && params[:email] && params[:password]
@@ -196,7 +219,7 @@ class ApiController < ApplicationController
     toks =  query.strip.split(/\W+/)
     tsquery = toks.join('|')
     #TODO: now put that query into the textsearch through psql..
-    render :json => Search.advanced_search(term: tsquery).where("user_id != ?", @user.id).limit(20).to_json( except: [:term, :searchable_type] ), :status => 200
+    render :json => Search.advanced_search(term: tsquery).where("user_id != ?", @user.id).limit(20).to_json( except: [:term, :user_id,:searchable_type] ), :status => 200
   end
 
   def my_uploaded_songs

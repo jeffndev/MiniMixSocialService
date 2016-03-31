@@ -14,6 +14,7 @@ Rails.application.routes.draw do
   post 'api/search_songs'
   get 'api/verify_token'
   get 'api/song_privacy'
+  get 'api/song_version'
   get 'api/my_uploaded_songs'
     
     
