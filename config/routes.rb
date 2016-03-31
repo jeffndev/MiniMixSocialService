@@ -7,6 +7,9 @@ Rails.application.routes.draw do
   post 'api/upload_song'
   post 'api/upload_song_file'
   post 'api/upload_track_file'
+
+  post 'api/update_song'
+  post 'api/update_song_info'
   
   post 'api/search_songs'
   get 'api/verify_token'

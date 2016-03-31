@@ -4,7 +4,9 @@ class ApiController < ApplicationController
 
 
   skip_before_filter  :verify_authenticity_token
-  
+
+  TRACKS_MAX_INDEX = 5  
+
   def register_user
     if params && params[:display_name] && params[:email] && params[:password]
         if  User.where(:email => params[:email]).first
@@ -115,6 +117,7 @@ class ApiController < ApplicationController
       end
     end
   end
+
   def upload_track_file
     if  params[:song_identifier_hash] && params[:track_identifier_hash] && params[:track] 
       #user = User.where( :email => params[:email]).first
@@ -233,7 +236,7 @@ class ApiController < ApplicationController
         
         s3 = AWS::S3.new
         if s3
-          rand_id = rand_string(40)
+          rand_id = song.s3_random_id || rand_string(40)
           bucket = s3.buckets[ENV["S3_BUCKET_NAME"]]
           s3_obj = bucket.objects[rand_id]
           s3_obj.write(song_file, :acl => :public_read)
@@ -265,21 +268,24 @@ class ApiController < ApplicationController
     end
   end
  
-   def upload_song
-    if params[:song_identifier_hash] && params[:name] && params[:genre] && params[:private_flag]
+  def upload_song
+    if params[:song_identifier_hash] && params[:name] && params[:genre] && params[:private_flag] && params[:version]
       #user = User.where( :email => params[:email]).first
        if !@user
         e = Error.new( status: 401, message: 'Could not identify the user')
         render json: track.to_json and return  
       end
       if @user.authtoken_expiry > Time.now
-        old_song = SongMix.where( :song_identifier_hash => params[:song_identifier_hash]).first
-        if old_song
+        old_song = @user.song_mixes.where( :song_identifier_hash => params[:song_identifier_hash]).first
+        if old_song && old_song.version >= params[:version].to_i   
          #TODO: check a version number, if params version is greater, then continue and remove old song from s3..
           render :json => old_song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})  and return
         end
-        
-          song = @user.song_mixes.build(
+        if old_song
+          update_song and return
+        end
+
+        song = @user.song_mixes.build(
                              :name => params[:name],
                              :song_identifier_hash => params[:song_identifier_hash], 
                              :genre => params[:genre],
@@ -289,7 +295,7 @@ class ApiController < ApplicationController
                              :song_duration_secs => params[:song_duration_secs])
           
           if song.save
-              0.upto(5) do |i|
+              0.upto(TRACKS_MAX_INDEX) do |i|
                 break if !params["track_identifier_hash#{i}"]
                 song.audio_tracks.create(:name => params["name#{i}"],
                                          :display_order => params["display_order#{i}"],
@@ -300,7 +306,7 @@ class ApiController < ApplicationController
                                         )      
               end
 
-              render :json => song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})
+            render :json => song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})
             else
               error_str = ""
 
@@ -322,8 +328,83 @@ class ApiController < ApplicationController
     end
   end
 
-private 
-  
+  def update_song_info
+    if !@user
+      e = Error.new(status: 401, message: 'User token could not identify user')
+      render json: e.to_json, status: 401 and return
+    end
+    if @user.authtoken_expiry < Time.now
+      e = Error.new( status: 401,  message: 'User authtoken has expired, could not identify user')
+      render json: e.to_json, status: 400 and return
+    end
+     if !(params[:song_identifier_hash] && params[:name] && params[:genre] && params[:private_flag])
+       e = Error.new(:status => 400, :message => 'required parameters were not found')
+      render :json => e.to_json, :status => 400 and return
+    end
+    song = @user.song_mixes.where( :song_identifier_hash => params[:song_identifier_hash]).first
+    if !song
+      e = Error.new(:status => 400, :message => 'Could not identify the song for update')
+      render :json => e.to_json, :status => 400 and return
+    end
+    #NOTE: we are not updateing version, because that is only done with a full update_song
+    if !song.update_attributes( private_flag: params[:private_flag], song_duration_secs: params[:song_duration_secs],
+                                         genre: params[:genre], name: params[:name], self_rating: params[:self_rating], song_description: params[:song_description])
+      e = Error.new(status: 400, message: 'Could not save new song information')
+      render json: e.to_json, status: 400 and return
+    end
+    render :json => song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})
+  end
+
+  def update_song
+    if !@user
+      e = Error.new(status: 401, message: 'User token could not identify user')
+      render json: e.to_json, status: 401 and return
+    end
+    if @user.authtoken_expiry < Time.now
+      e = Error.new( status: 401,  message: 'User authtoken has expired, could not identify user')
+      render json: e.to_json, status: 400 and return
+    end
+    if !(params[:song_identifier_hash] && params[:name] && params[:genre] && params[:private_flag] && params[:version])
+       e = Error.new(:status => 400, :message => 'required parameters were not found')
+      render :json => e.to_json, :status => 400 and return
+    end
+    existing_song =  @user.song_mixes.where( :song_identifier_hash => params[:song_identifier_hash]).first
+    if !existing_song
+      e = Error.new(:status => 400, :message => 'Could not identify the song for update')
+      render :json => e.to_json, :status => 400 and return
+    end
+    old_s3_id = existing_song.s3_random_id
+    #NOTE: setting the mix_file_url to nil..so it can be set on successufl s3 file re upload
+    if !existing_song.update_attributes( version: params[:version], private_flag: params[:private_flag],
+                                         mix_file_url: nil,
+                                         genre: params[:genre], name: params[:name], self_rating: params[:self_rating],
+                                         song_description: params[:song_description], song_duration_secs: params[:song_duration_secs])
+      e = Error.new(status: 400, message: 'Could not save new song information')
+      render json: e.to_json, status: 400 and return
+    end
+    track_s3_ids = existing_song.audio_tracks.map { |t| t.s3_random_id }.compact
+    existing_song.audio_tracks.destroy_all
+    0.upto(TRACKS_MAX_INDEX) do |i|
+      break if !params["track_identifier_hash#{i}"]
+      existing_song.audio_tracks.create(:name => params["name#{i}"],
+                               :display_order => params["display_order#{i}"],
+                               :mix_volume => params["mix_volume#{i}"],
+                               :track_identifier_hash => params["track_identifier_hash#{i}"],
+                               :track_description => params["track_description#{i}"],
+                               :track_duration_secs => params["track_duration_secs#{i}"] )      
+    end
+    #delete the old content out of s3..it will be re-populatd with the file upload api calls that are queuded by client
+    s3 = AWS::S3.new
+    if s3
+      bucket = s3.buckets[ENV["S3_BUCKET_NAME"]]
+      old_mix_file = bucket.objects[old_s3_id]
+      old_mix_file.delete
+      track_s3_ids.each { |objId| bucket.objects[objId].delete } 
+    end 
+    render :json => existing_song.to_json(:include => { :audio_tracks => { :except => [:created_at, :updated_at, :id, :song_mix_id] }})
+  end
+
+ private
   def check_for_valid_authtoken
     authenticate_or_request_with_http_token do |token, options|     
       @user = User.where(:api_authtoken => token).first      
