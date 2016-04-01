@@ -315,7 +315,8 @@ class ApiController < ApplicationController
                              :song_description => params[:song_description], 
                              :self_rating => params[:self_rating],
                              :private_flag => params[:private_flag],
-                             :song_duration_secs => params[:song_duration_secs])
+                             :song_duration_secs => params[:song_duration_secs],
+                             :version => params[:version])
           
           if song.save
               0.upto(TRACKS_MAX_INDEX) do |i|
