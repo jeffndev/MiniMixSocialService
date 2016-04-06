@@ -3,7 +3,7 @@ class ApiController < ApplicationController
    before_filter :check_for_valid_authtoken, :except => [ :register_user, :signin, :get_token ]  
 
 
-#  skip_before_filter  :verify_authenticity_token
+  skip_before_filter  :verify_authenticity_token
 
   TRACKS_MAX_INDEX = 5  
 
