@@ -219,7 +219,8 @@ class ApiController < ApplicationController
     toks =  query.strip.split(/\W+/)
     tsquery = toks.join('|')
     #TODO: now put that query into the textsearch through psql..
-    render :json => Search.advanced_search(term: tsquery).where("user_id != ?", @user.id).limit(20).to_json( except: [:term, :user_id,:searchable_type] ), :status => 200
+    #render :json => Search.advanced_search(term: tsquery).where("user_id != ?", @user.id).limit(20).to_json( except: [:term, :user_id,:searchable_type] ), :status => 200
+    render :json => Search.advanced_search(term: tsquery).limit(20).to_json( except: [:term, :user_id,:searchable_type] ), :status => 200
   end
 
   def my_uploaded_songs
