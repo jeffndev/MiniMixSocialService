@@ -248,7 +248,7 @@ class ApiController < ApplicationController
        e = Error.new(:status => 400, :message => 'required parameters were not there')
       render :json => e.to_json, :status => 400 and return
     end
-    song=@user.SongMix.where( song_identifier_hash: params[:song_identifier_hash]).first
+    song=@user.song_mixes.where( song_identifier_hash: params[:song_identifier_hash]).first
     if !song
       e = Error.new( status: 400, message: 'could not identify song with id')
       render :json => e.to_json, :status => 400 and return
