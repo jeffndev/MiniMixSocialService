@@ -234,6 +234,27 @@ class ApiController < ApplicationController
     end
     render json: @user.song_mixes.to_json( include: { audio_tracks:  {except: [:song_mix_id, :id]}}), status: 200
   end
+  
+  def my_song
+    if !@user
+      e = Error.new(status: 401, message: 'User token could not identify user')
+      render json: e.to_json, status: 401 and return
+    end
+    if @user.authtoken_expiry < Time.now
+      e = Error.new( status: 401,  message: 'User authtoken has expired, could not identify user')
+      render json: e.to_json, status: 400 and return
+    end
+     if !params[:song_identifier_hash]
+       e = Error.new(:status => 400, :message => 'required parameters were not there')
+      render :json => e.to_json, :status => 400 and return
+    end
+    song=@user.SongMix.where( song_identifier_hash: params[:song_identifier_hash]).first
+    if !song
+      e = Error.new( status: 400, message: 'could not identify song with id')
+      render :json => e.to_json, :status => 400 and return
+    end
+    render json: song.to_json( include: { audio_tracks:  {except: [:song_mix_id, :id]}}), status: 200
+  end
  
   def upload_song_file
     if  params[:song_identifier_hash] && params[:mix] 
